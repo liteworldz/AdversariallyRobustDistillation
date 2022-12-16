@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+# Folders
+data/
+checkpoint/CIFAR10/
+
 # Distribution / packaging
 .Python
 build/
