@@ -48,7 +48,7 @@ def adjust_learning_rate(optimizer, epoch, lr):
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr   
     
-def train(basic_net, teacher_net, epoch, optimizer, trainloader):
+def train(basic_net, teacher_net, epoch, optimizer, trainloader, loss):
     print("=> Train Epoch:", epoch)
     basic_net.train()
     attack_model = AttackPGD(basic_net, config)
@@ -57,11 +57,13 @@ def train(basic_net, teacher_net, epoch, optimizer, trainloader):
     for batch_idx, (inputs, targets) in enumerate(iterator):
         inputs, targets = inputs.to(device), targets.to(device)     
         optimizer.zero_grad()
-        outputs, pert_inputs = attack_model(inputs, targets)
+        adv_outputs, pert_inputs = attack_model(inputs, targets)
         teacher_outputs = teacher_net(inputs)
         basic_outputs = basic_net(inputs)
-        loss = args.alpha*args.temp*args.temp*KL_loss(F.log_softmax(basic_outputs/args.temp, dim=1),
-                                                      F.softmax(outputs/args.temp, dim=1)) + (1.0-args.alpha)*XENT_loss(basic_outputs, targets)
+        if loss == 'paper':
+            loss = args.alpha*args.temp*args.temp*KL_loss(F.log_softmax(adv_outputs/args.temp, dim=1),F.softmax(teacher_outputs/args.temp, dim=1))+(1.0-args.alpha)*XENT_loss(basic_outputs, targets)
+        else:
+            loss = args.alpha*args.temp*args.temp*KL_loss(F.log_softmax(basic_outputs/args.temp, dim=1),F.softmax(adv_outputs/args.temp, dim=1))+(1.0-args.alpha)*XENT_loss(basic_outputs, targets)
         loss.backward()
         optimizer.step()
         train_loss += loss.item()
@@ -72,8 +74,8 @@ def train(basic_net, teacher_net, epoch, optimizer, trainloader):
             'optimizer': optimizer.state_dict()
         }
         if not os.path.isdir('checkpoint/'+args.dataset+'/'+args.output+'/'):
-            os.makedirs('checkpoint/'+args.dataset+'/'+args.output+'/', )
-        torch.save(state, './checkpoint/'+args.dataset+'/'+args.output+'/epoch='+str(epoch)+'.t7')
+            os.makedirs('checkpoint/'+args.dataset+'/'+ args.output+'/', )
+        torch.save(state, './checkpoint/'+args.dataset+'/'+ args.output+'/epoch='+str(epoch)+'.t7')
     print('Mean Training Loss:', train_loss/len(iterator))
     return train_loss
 
@@ -160,7 +162,7 @@ def main(args):
     for epoch in range(args.epochs):
         print('epoch:',epoch)
         adjust_learning_rate(optimizer, epoch, lr)
-        train_loss = train(basic_net, teacher_net, epoch, optimizer, trainloader)
+        train_loss = train(basic_net, teacher_net, epoch, optimizer, trainloader, args.loss)
         if (epoch+1)%args.val_period == 0:
             natural_val, robust_val = test(basic_net, epoch, optimizer, testloader)
 
@@ -170,7 +172,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr_schedule', type=int, nargs='+', default=[100, 150], help='Decrease learning rate at these epochs.')
     parser.add_argument('--lr_factor', default=0.1, type=float, help='factor by which to decrease lr')
     parser.add_argument('--epochs', default=200, type=int, help='number of epochs for training')
-    parser.add_argument('--output', default = './output/', type=str, help='output subdirectory')
+    parser.add_argument('--output', default = 'output', type=str, help='output subdirectory')
+    parser.add_argument('--loss', default = 'paper', type=str, help='loss function to be sued')
     parser.add_argument('--model', default = 'ResNet18', type = str, help = 'student model name')
     parser.add_argument('--teacher_model', default = 'ResNet18', type = str, help = 'teacher network model')
     parser.add_argument('--teacher_path', default = './chekpoint/', type=str, help='path of teacher net being distilled')
