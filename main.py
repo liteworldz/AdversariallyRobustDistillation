@@ -7,6 +7,7 @@ import torch.backends.cudnn as cudnn
 import torchvision
 import torchvision.transforms as transforms
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'  
 import argparse
 from tqdm import tqdm
 from models import *
@@ -66,7 +67,7 @@ def train(basic_net, teacher_net, epoch, optimizer, trainloader, loss, loss_sequ
     for batch_idx, (inputs, targets) in enumerate(iterator):
         inputs, targets = inputs.to(device), targets.to(device)     
         optimizer.zero_grad()
-        adv_outputs, pert_inputs = attack_model(inputs, targets)
+        adv_outputs, pert_inputs = attack_model(inputs, targets) # the basic_net will be exposed to adversarial inputs
         if loss == 'paper':
             teacher_outputs = teacher_net(inputs)
             basic_outputs = basic_net(inputs)
