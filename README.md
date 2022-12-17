@@ -5,7 +5,7 @@ The code was also adopted from the original paper source code (https://github.co
 
 
 
-# env setup
+## env setup
 ```
 conda create -n advkd python=3.9
 conda activate advkd
@@ -14,12 +14,12 @@ pip install torchattacks argparse scipy tqdm
 pip install labml-helpers
 ```
 
-# Training Flags (loss ['paper': original paper loss, 'method': new method loss without a teacher]), you can also set other parameters like alpha, temperature, output folder and so on.
+## Training Flags (loss ['paper': original paper loss, 'method': new method loss without a teacher]), you can also set other parameters here like alpha, temperature, output folder and so on.
 ```
 python main.py --loss paper --alpha 0.9
 ```
 
-# Testing your network with PGD or AUTO attacks
+## Testing your network with PGD or AUTO attacks
 ```
 python test.py --filename 'you_file_name' --attack PGD
 ```
