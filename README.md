@@ -10,7 +10,7 @@ The code was also adopted from the original paper source code (https://github.co
 conda create -n advkd python=3.9
 conda activate advkd
 conda install pytorch torchvision torchaudio pytorch-cuda=11.6 -c pytorch -c nvidia 
-pip install torchattacks argparse scipy tdqm
+pip install torchattacks argparse scipy tqdm
 pip install labml-helpers
 ```
 
