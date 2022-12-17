@@ -47,8 +47,17 @@ def adjust_learning_rate(optimizer, epoch, lr):
         lr *= args.lr_factor
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr   
-    
-def train(basic_net, teacher_net, epoch, optimizer, trainloader, loss):
+def generate_loss_sequence(start, end, step):
+  # Initialize the current number to the start value
+  current_number = start
+  # Loop until the current number is less than the end value
+  while current_number > end:
+    # Yield the current number
+    yield current_number
+    # Decrement the current number by the step value
+    current_number -= step
+
+def train(basic_net, teacher_net, epoch, optimizer, trainloader, loss, loss_sequence):
     print("=> Train Epoch:", epoch)
     basic_net.train()
     attack_model = AttackPGD(basic_net, config)
@@ -58,12 +67,18 @@ def train(basic_net, teacher_net, epoch, optimizer, trainloader, loss):
         inputs, targets = inputs.to(device), targets.to(device)     
         optimizer.zero_grad()
         adv_outputs, pert_inputs = attack_model(inputs, targets)
-        teacher_outputs = teacher_net(inputs)
-        basic_outputs = basic_net(inputs)
         if loss == 'paper':
+            teacher_outputs = teacher_net(inputs)
+            basic_outputs = basic_net(inputs)
             loss = args.alpha*args.temp*args.temp*KL_loss(F.log_softmax(adv_outputs/args.temp, dim=1),F.softmax(teacher_outputs/args.temp, dim=1))+(1.0-args.alpha)*XENT_loss(basic_outputs, targets)
-        else:
+        elif loss == 'sequence':
+            basic_outputs = basic_net(inputs)
+            loss = XENT_loss(adv_outputs, targets) + loss_sequence[epoch]
+        elif loss == 'method':
+            basic_outputs = basic_net(inputs)
             loss = args.alpha*args.temp*args.temp*KL_loss(F.log_softmax(basic_outputs/args.temp, dim=1),F.softmax(adv_outputs/args.temp, dim=1))+(1.0-args.alpha)*XENT_loss(basic_outputs, targets)
+        else:
+            loss = XENT_loss(adv_outputs, targets) 
         loss.backward()
         optimizer.step()
         train_loss += loss.item()
@@ -105,6 +120,14 @@ def test(basic_net, epoch, optimizer, testloader):
     return natural_acc, robust_acc
 
 def main(args):
+    if args.loss== 'paper':
+        print('Paper Implementation')
+    elif args.loss =='sequence':
+        print("Loss Sequence Method")
+    elif args.loss =='method':
+        print("New Method Implementation")
+    else:
+        print("Normal Adversarial Training")
     print('==> Preparing data..')
     transform_train = transforms.Compose([
         transforms.RandomCrop(32, padding=4),
@@ -159,10 +182,14 @@ def main(args):
     print("preparing attack with student model..")
     lr = args.lr
     optimizer = optim.SGD(basic_net.parameters(), lr=lr, momentum=0.9, weight_decay=2e-4)
+    # generate loss sequence in a list
+    loss_sequence = []
+    for loss in generate_loss_sequence(0.9, 0.0, 0.01/2):
+        loss_sequence.append(loss)
     for epoch in range(args.epochs):
         print('epoch:',epoch)
         adjust_learning_rate(optimizer, epoch, lr)
-        train_loss = train(basic_net, teacher_net, epoch, optimizer, trainloader, args.loss)
+        train_loss = train(basic_net, teacher_net, epoch, optimizer, trainloader, args.loss, loss_sequence)
         if (epoch+1)%args.val_period == 0:
             natural_val, robust_val = test(basic_net, epoch, optimizer, testloader)
 
@@ -173,13 +200,13 @@ if __name__ == '__main__':
     parser.add_argument('--lr_factor', default=0.1, type=float, help='factor by which to decrease lr')
     parser.add_argument('--epochs', default=200, type=int, help='number of epochs for training')
     parser.add_argument('--output', default = 'output', type=str, help='output subdirectory')
-    parser.add_argument('--loss', default = 'paper', type=str, help='loss function to be sued')
+    parser.add_argument('--loss', default = '', type=str, help='loss function to be sued')
     parser.add_argument('--model', default = 'ResNet18', type = str, help = 'student model name')
     parser.add_argument('--teacher_model', default = 'ResNet18', type = str, help = 'teacher network model')
     parser.add_argument('--teacher_path', default = './chekpoint/', type=str, help='path of teacher net being distilled')
     parser.add_argument('--temp', default=30.0, type=float, help='temperature for distillation')
     parser.add_argument('--val_period', default=1, type=int, help='print every __ epoch')
-    parser.add_argument('--save_period', default=1, type=int, help='save every __ epoch')
+    parser.add_argument('--save_period', default=50, type=int, help='save every __ epoch')
     parser.add_argument('--alpha', default=0.9, type=float, help='weight for sum of losses')
     parser.add_argument('--dataset', default = 'CIFAR10', type=str, help='name of dataset')
     args = parser.parse_args()
